@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="sw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Client Registry — Rekodi za Wateja</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <span class="brand-mark">CR</span>
+        <div>
+          <h1>Client Registry</h1>
+          <p class="tagline">Tunza taarifa. Fanya application ukiwa tayari.</p>
+        </div>
+      </div>
+      <button id="newClientBtn" class="btn btn-primary">+ Mteja Mpya</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="toolbar">
+      <input type="text" id="searchInput" placeholder="Tafuta kwa jina, simu au NIDA...">
+      <select id="statusFilter" aria-label="Chuja clients kwa status">
+        <option value="">Status zote</option>
+        <option value="pending">Pending</option>
+        <option value="in_progress">In progress</option>
+        <option value="submitted">Submitted BRELA</option>
+        <option value="approved">Approved</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <span id="countLabel" class="count-label">0 wateja</span>
+    </section>
+
+    <section id="clientList" class="client-list"></section>
+    <nav id="pagination" class="pagination" aria-label="Kurasa za clients" hidden></nav>
+    <p id="emptyState" class="empty-state" hidden>
+      Bado hakuna mteja aliyesajiliwa. Bofya <strong>"+ Mteja Mpya"</strong> kuanza.
+    </p>
+  </main>
+
+  <!-- Modal ya kuongeza/kuedit client -->
+  <div id="modalOverlay" class="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="modalTitle">Mteja Mpya</h2>
+        <button id="closeModal" class="icon-btn">&times;</button>
+      </div>
+      <form id="clientForm">
+        <input type="hidden" id="clientId">
+        <label>Jina Kamili
+          <input type="text" id="fullName" required placeholder="mfano: Juma Athumani Kileo">
+        </label>
+        <label>Namba ya Simu
+          <input type="text" id="phoneNumber" required placeholder="mfano: 0712 345 678">
+        </label>
+        <label>Namba ya NIDA
+          <input type="text" id="nidaNumber" required inputmode="numeric" placeholder="mfano: 19850101XXXXXXXXXXXXX" class="mono">
+        </label>
+        <label>Aina ya Biashara
+          <input type="text" id="businessType" required placeholder="mfano: Mgahawa, Duka la Nguo, Usafirishaji">
+        </label>
+        <label>Email (si lazima)
+          <input type="email" id="email" placeholder="mfano: mteja@example.com">
+        </label>
+        <label>Password (si lazima)
+          <input type="password" id="password" placeholder="Weka password kama ipo">
+        </label>
+
+        <h3 class="form-section-title">Maswali ya Msingi</h3>
+
+        <label>Jina Kamili la Mama
+          <input type="text" id="motherFullName" placeholder="mfano: Mariam Hassan Mwakisisile">
+        </label>
+        <label>Mahali Alipozaliwa (Mpaka Kijiji)
+          <input type="text" id="birthPlace" placeholder="mfano: Kijiji cha Ilula, Kilolo, Iringa">
+        </label>
+        <label>Alihitimu Darasa la Saba Wapi na Mwaka Gani
+          <input type="text" id="std7Info" placeholder="mfano: Shule ya Msingi Ilula, 2010">
+        </label>
+        <label>Namba za Simu Alizosajili
+          <input type="text" id="registeredPhoneNumbers" placeholder="mfano: 0712345678, 0687654321">
+        </label>
+        <label>Makazi ya Kudumu (Mpaka Kijiji)
+          <input type="text" id="permanentResidence" placeholder="mfano: Kata ya Ilula, Kijiji cha Ilula, Kilolo, Iringa">
+        </label>
+        <label>Mahali Alipojiandikisha NIDA
+          <input type="text" id="nidaRegistrationPlace" placeholder="mfano: Ofisi ya NIDA, Kilolo">
+        </label>
+
+        <h3 class="form-section-title">Eneo la Biashara (kwa Uthibitisho wa Eneo)</h3>
+        <label>Mkoa
+          <select id="premiseRegion">
+            <option value="">-- Chagua Mkoa --</option>
+          </select>
+        </label>
+        <label>Wilaya / Halmashauri
+          <select id="premiseDistrict" disabled>
+            <option value="">-- Chagua Mkoa Kwanza --</option>
+          </select>
+        </label>
+        <label>Kata
+          <select id="premiseWard" disabled>
+            <option value="">-- Chagua Wilaya Kwanza --</option>
+          </select>
+        </label>
+        <label>Mtaa / Kijiji
+          <input type="text" id="premiseStreet" placeholder="mfano: Pugu">
+        </label>
+        <label>Namba ya Kiwanja / Jengo (si lazima)
+          <input type="text" id="premisePlotNumber" placeholder="mfano: Plot 45">
+        </label>
+        <label>Umiliki wa Eneo
+          <select id="premiseOwnership">
+            <option value="">-- Chagua --</option>
+            <option value="mwenyewe">Mmiliki Mwenyewe wa Eneo</option>
+            <option value="pango">Amepanga (Pango)</option>
+          </select>
+        </label>
+        <div id="landlordFieldsGroup" hidden>
+          <label>Jina la Mmiliki wa Jengo
+            <input type="text" id="landlordName" placeholder="mfano: John Mushi">
+          </label>
+          <label>Namba ya Simu ya Mmiliki
+            <input type="text" id="landlordPhone" placeholder="mfano: 0755 123 456">
+          </label>
+          <label>Muda wa Mkataba wa Pango
+            <input type="text" id="leasePeriod" placeholder="mfano: Januari 2025 - Desemba 2026">
+          </label>
+        </div>
+
+        <label>Maelezo ya Ziada (si lazima)
+          <textarea id="notes" rows="3" placeholder="mfano: anataka jina la biashara 'Baraka Enterprises', wamiliki wawili..."></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="cancelBtn" class="btn btn-ghost">Ghairi</button>
+          <button type="submit" class="btn btn-primary">Save Mteja</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="viewModalOverlay" class="modal-overlay" hidden>
+    <div class="modal view-modal">
+      <div class="modal-head">
+        <h2 id="viewModalTitle">Taarifa za Mteja</h2>
+        <button id="closeViewModal" class="icon-btn" aria-label="Funga">&times;</button>
+      </div>
+      <div id="viewClientFields" class="view-fields"></div>
+      <div class="view-actions">
+        <button type="button" id="copyAllDetails" class="btn btn-primary">Copy All Details</button>
+        <button type="button" id="downloadPremiseBtn" class="btn btn-ghost">Pakua Uthibitisho wa Eneo (.docx)</button>
+      </div>
+
+      <div class="checklist-section">
+        <h3>Muongozo wa BRELA application</h3>
+        <div id="checklist" class="checklist"></div>
+      </div>
+
+      <div class="document-section">
+        <h3>Documents</h3>
+        <form id="documentUploadForm" class="document-upload-form">
+          <label>
+            Aina ya Document
+            <select id="documentType">
+              <option value="nida">NIDA</option>
+              <option value="tin_number">TIN Number</option>
+              <option value="invoice">Invoice</option>
+              <option value="business_licence">Business Licence</option>
+              <option value="tax_clearance">Tax Clearance</option>
+              <option value="contract">Mkataba</option>
+            </select>
+          </label>
+          <label>
+            Chagua Document
+            <input type="file" id="documentFileInput" accept=".pdf,image/png,image/jpeg,image/jpg">
+          </label>
+          <button type="submit" class="btn btn-primary">Upload PDF</button>
+        </form>
+        <div id="documentList" class="document-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
