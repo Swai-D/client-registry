@@ -513,3 +513,140 @@ body {
   .dynamic-row-grid { grid-template-columns: 1fr; }
   .add-return-form { flex-direction: column; align-items: stretch; }
 }
+
+/* Annual Return form layout */
+#companyModalOverlay .modal {
+  max-width: 900px;
+  padding: 28px 30px 30px;
+}
+
+#companyForm {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+#companyForm > label {
+  grid-column: span 6;
+  min-width: 0;
+  margin-bottom: 16px;
+}
+
+#companyForm > label:has(textarea),
+#companyForm > .form-section-title,
+#companyForm > .dynamic-rows,
+#companyForm > .btn-small,
+#companyForm > .modal-actions {
+  grid-column: 1 / -1;
+}
+
+#companyForm input,
+#companyForm textarea,
+#companyForm select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#companyForm textarea {
+  min-height: 78px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+#companyForm input:focus,
+#companyForm textarea:focus,
+#companyForm select:focus,
+.dynamic-row input:focus,
+.dynamic-row textarea:focus,
+.add-return-form input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+
+#companyForm .form-section-title {
+  margin: 10px 0 14px;
+  padding: 18px 0 0;
+  color: var(--navy);
+  border-top: 1px solid var(--line);
+  font-size: 1.05rem;
+}
+
+#companyForm .dynamic-rows {
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+#companyForm .dynamic-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 12px;
+  padding: 14px;
+  background: #faf8f3;
+  border-color: var(--line);
+  border-radius: 8px;
+}
+
+#companyForm .dynamic-row-grid {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+#companyForm .dynamic-row input,
+#companyForm .dynamic-row textarea {
+  min-width: 0;
+  margin: 0;
+  padding: 9px 10px;
+  font-size: 0.82rem;
+}
+
+#companyForm .dynamic-row > textarea {
+  grid-column: 1 / -1;
+}
+
+#companyForm .dynamic-row .btn-small {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+#companyForm > .btn-small {
+  justify-self: start;
+  margin-bottom: 10px;
+}
+
+#companyForm .modal-actions {
+  margin-top: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 700px) {
+  #companyModalOverlay {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  #companyModalOverlay .modal {
+    max-height: calc(100vh - 24px);
+    padding: 22px 18px 20px;
+  }
+
+  #companyForm > label {
+    grid-column: 1 / -1;
+  }
+
+  #companyForm .dynamic-row-grid {
+    grid-template-columns: 1fr;
+  }
+}
