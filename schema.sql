@@ -152,3 +152,16 @@ CREATE TABLE IF NOT EXISTS company_returns (
     UNIQUE KEY unique_company_return (company_id, return_date),
     FOREIGN KEY (company_id) REFERENCES company_clients(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS company_documents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT NOT NULL,
+    document_type VARCHAR(100) NOT NULL,
+    display_name VARCHAR(255) NOT NULL,
+    stored_name VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    mime_type VARCHAR(120) NOT NULL,
+    file_size INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES company_clients(id) ON DELETE CASCADE
+);

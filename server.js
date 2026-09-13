@@ -238,6 +238,20 @@ async function ensureCompanyTables() {
             FOREIGN KEY (company_id) REFERENCES company_clients(id) ON DELETE CASCADE
         )
     `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS company_documents (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            company_id INT NOT NULL,
+            document_type VARCHAR(100) NOT NULL,
+            display_name VARCHAR(255) NOT NULL,
+            stored_name VARCHAR(255) NOT NULL,
+            file_path VARCHAR(500) NOT NULL,
+            mime_type VARCHAR(120) NOT NULL,
+            file_size INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES company_clients(id) ON DELETE CASCADE
+        )
+    `);
 }
 
 function sanitizeName(value) {
@@ -652,6 +666,107 @@ app.get('/api/companies/:id/returns/:returnId/form131', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Imeshindikana kutengeneza Form 131' });
+    }
+});
+
+async function loadCompanyUploadFolder(req, res, next) {
+    try {
+        const [rows] = await pool.query('SELECT id, company_name FROM company_clients WHERE id = ?', [req.params.id]);
+        if (!rows.length) return res.status(404).json({ error: 'Kampuni haijapatikana' });
+        req.clientUploadFolder = `company-${rows[0].id}-${sanitizeName(rows[0].company_name)}`;
+        next();
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana kuandaa folder la kampuni' });
+    }
+}
+
+const COMPANY_DOCUMENT_TYPES = [
+    'certificate_of_incorporation', 'memarts', 'tin_certificate', 'business_licence',
+    'audited_financials', 'previous_annual_return', 'directors_nida', 'tax_clearance',
+    'board_resolution', 'other',
+];
+
+app.get('/api/companies/:id/documents', async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            `SELECT * FROM company_documents WHERE company_id = ? ORDER BY created_at DESC`,
+            [req.params.id]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana kupata documents za kampuni' });
+    }
+});
+
+app.post('/api/companies/:id/documents', loadCompanyUploadFolder, upload.single('document'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Tafadhali chagua document.' });
+        }
+
+        const companyId = req.params.id;
+        const documentType = COMPANY_DOCUMENT_TYPES.includes(req.body.document_type) ? req.body.document_type : 'other';
+        const [companyRows] = await pool.query('SELECT company_name FROM company_clients WHERE id = ?', [companyId]);
+        if (!companyRows.length) {
+            return res.status(404).json({ error: 'Kampuni haijapatikana' });
+        }
+
+        const mimeType = req.file.mimetype || 'application/octet-stream';
+        const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+        if (!allowedTypes.includes(mimeType)) {
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ error: 'Aina ya file si sahihi. Tumia PDF, PNG, JPG au JPEG.' });
+        }
+
+        const companyName = sanitizeName(companyRows[0].company_name);
+        const typeName = sanitizeName(documentType);
+        let finalPath = req.file.path;
+        let finalMime = mimeType;
+        let finalFileName = req.file.filename;
+
+        if (mimeType === 'application/pdf') {
+            finalFileName = `${typeName}_${companyName}_${Date.now()}.pdf`;
+            finalPath = path.join(path.dirname(req.file.path), finalFileName);
+            fs.renameSync(req.file.path, finalPath);
+        } else {
+            finalFileName = `${typeName}_${companyName}_${Date.now()}.pdf`;
+            finalPath = path.join(path.dirname(req.file.path), finalFileName);
+            await convertImageToPdf(req.file.path, finalPath);
+            fs.unlinkSync(req.file.path);
+            finalMime = 'application/pdf';
+        }
+
+        const displayName = `${documentType.replace(/_/g, ' ')} - ${companyRows[0].company_name}.pdf`;
+        const fileSize = fs.statSync(finalPath).size;
+
+        await pool.query(
+            `INSERT INTO company_documents (company_id, document_type, display_name, stored_name, file_path, mime_type, file_size)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [companyId, documentType, displayName, finalFileName, `/uploads/${req.clientUploadFolder}/${finalFileName}`, finalMime, fileSize]
+        );
+
+        res.status(201).json({ success: true, message: 'Document imesave' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana kupakia document' });
+    }
+});
+
+app.delete('/api/companies/:id/documents/:documentId', async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            'SELECT * FROM company_documents WHERE id = ? AND company_id = ?', [req.params.documentId, req.params.id]
+        );
+        if (!rows.length) return res.status(404).json({ error: 'Document haijapatikana' });
+        const filePath = path.join(__dirname, rows[0].file_path.replace(/^\//, ''));
+        await pool.query('DELETE FROM company_documents WHERE id = ?', [req.params.documentId]);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana ku-delete document' });
     }
 });
 

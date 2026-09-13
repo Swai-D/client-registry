@@ -342,6 +342,33 @@
         </form>
         <div id="returnsList" class="returns-list"></div>
       </div>
+
+      <div class="document-section">
+        <h3>Documents za Kampuni</h3>
+        <form id="companyDocumentUploadForm" class="document-upload-form">
+          <label>
+            Aina ya Document
+            <select id="companyDocumentType">
+              <option value="certificate_of_incorporation">Certificate of Incorporation</option>
+              <option value="memarts">Memorandum &amp; Articles of Association</option>
+              <option value="tin_certificate">TIN Certificate (Kampuni)</option>
+              <option value="business_licence">Business Licence</option>
+              <option value="audited_financials">Audited Financial Statements</option>
+              <option value="previous_annual_return">Annual Return Iliyopita (Form 131/128)</option>
+              <option value="directors_nida">NIDA za Directors/Secretary</option>
+              <option value="tax_clearance">Tax Clearance Certificate</option>
+              <option value="board_resolution">Board Resolution</option>
+              <option value="other">Nyingine</option>
+            </select>
+          </label>
+          <label>
+            Chagua Document
+            <input type="file" id="companyDocumentFileInput" accept=".pdf,image/png,image/jpeg,image/jpg">
+          </label>
+          <button type="submit" class="btn btn-primary">Upload PDF</button>
+        </form>
+        <div id="companyDocumentList" class="document-list"></div>
+      </div>
     </div>
   </div>
 

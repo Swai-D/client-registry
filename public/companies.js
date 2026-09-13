@@ -324,6 +324,7 @@ async function openCompanyViewModal(id) {
   }).join('') + `<h3 class="form-section-title">Directors</h3>${directorsHtml}<h3 class="form-section-title">Wanahisa</h3>${membersHtml}`;
 
   renderReturns(company.returns || []);
+  fetchCompanyDocuments(company.id);
   companyViewModalOverlay.hidden = false;
 }
 
@@ -417,3 +418,65 @@ function closeCompanyViewModal() {
 
 document.getElementById('closeCompanyViewModal').addEventListener('click', closeCompanyViewModal);
 companyViewModalOverlay.addEventListener('click', (e) => { if (e.target === companyViewModalOverlay) closeCompanyViewModal(); });
+
+// --- Company documents ---
+const companyDocumentUploadForm = document.getElementById('companyDocumentUploadForm');
+const companyDocumentFileInput = document.getElementById('companyDocumentFileInput');
+const companyDocumentList = document.getElementById('companyDocumentList');
+
+async function fetchCompanyDocuments(companyId) {
+  const res = await fetch(`${COMPANY_API}/${companyId}/documents`);
+  const docs = await res.json();
+  companyDocumentList.innerHTML = docs.length === 0
+    ? '<p class="document-empty">Bado hakuna document iliyopakiwa.</p>'
+    : docs.map((doc) => `
+        <div class="document-item">
+          <div>
+            <strong>${escapeHtml(doc.display_name)}</strong>
+            <small>${escapeHtml(doc.document_type.replace(/_/g, ' '))}</small>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <a href="${doc.file_path}" target="_blank" rel="noopener" class="btn btn-ghost">Open</a>
+            <button type="button" class="btn btn-danger" data-action="delete-company-document" data-doc-id="${doc.id}">Futa</button>
+          </div>
+        </div>
+      `).join('');
+}
+
+companyDocumentUploadForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!viewingCompany) return;
+  if (!companyDocumentFileInput.files || !companyDocumentFileInput.files[0]) {
+    showToast('Chagua document kwanza');
+    return;
+  }
+
+  const file = companyDocumentFileInput.files[0];
+  const formData = new FormData();
+  formData.append('document', file);
+  formData.append('document_type', document.getElementById('companyDocumentType').value);
+
+  const res = await fetch(`${COMPANY_API}/${viewingCompany.id}/documents`, {
+    method: 'POST',
+    body: formData,
+  });
+  const payload = await res.json();
+
+  if (!res.ok) {
+    showToast(payload.error || 'Imeshindikana kupakia document');
+    return;
+  }
+
+  companyDocumentUploadForm.reset();
+  showToast('Document imepakiwa ✓');
+  fetchCompanyDocuments(viewingCompany.id);
+});
+
+companyDocumentList.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-action="delete-company-document"]');
+  if (!btn || !viewingCompany) return;
+  if (!confirm('Una uhakika unataka kufuta document hii?')) return;
+  await fetch(`${COMPANY_API}/${viewingCompany.id}/documents/${btn.dataset.docId}`, { method: 'DELETE' });
+  showToast('Document imefutwa');
+  fetchCompanyDocuments(viewingCompany.id);
+});

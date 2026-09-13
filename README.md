@@ -15,6 +15,7 @@ Ka simple app ya kutunza taarifa za wateja kabla ya kufanya application (mfano B
 - Kwa kila kampuni, fungua **View** kuona taarifa zote na "Annual Returns" tracker: ongeza return mpya kwa kuweka tarehe ("made up to"), fuatilia status yake (Pending → Inaandaliwa → Imefiliwa BRELA → Imekamilika)
 - Bofya **Pakua Form 131** kwenye return yoyote — app inatengeneza moja kwa moja Form 131 (.docx) iliyojaa taarifa za kampuni hiyo kwa tarehe hiyo ya return, tayari kuchapishwa/kusainiwa/kuwasilishwa ORS
 - Taarifa za kampuni (directors, secretary, shares) hazihitaji kuandikwa upya kila mwaka — unaongeza tu return mpya na kubonyeza Pakua Form 131
+- **Documents za kampuni** — pakia na uhifadhi: Certificate of Incorporation, Memorandum & Articles of Association (MEMARTS), TIN Certificate ya kampuni, Business Licence, Audited Financial Statements, Annual Return iliyopita, NIDA za Directors/Secretary, Tax Clearance Certificate, Board Resolution. Kila document inabadilishwa kuwa PDF kiotomatiki na kuhifadhiwa kwenye folder lake la kampuni (`uploads/company-<id>-<jina>/`), sawa na ilivyo upande wa clients
 
 ## Mahitaji
 - [Node.js](https://nodejs.org) (v18 au zaidi) — download na install kama huna
