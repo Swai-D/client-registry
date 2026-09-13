@@ -7,6 +7,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { PDFDocument } = require('pdf-lib');
 const { buildPremiseDocxBuffer } = require('./lib/premiseDocx');
+const { buildAnnualReturnDocxBuffer } = require('./lib/annualReturnDocx');
 const tzLocations = require('./data/tz-locations.json');
 
 const app = express();
@@ -169,6 +170,76 @@ async function ensureClientChecklistTable() {
     `);
 }
 
+async function ensureCompanyTables() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS company_clients (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            company_number VARCHAR(50) NOT NULL,
+            company_name VARCHAR(255) NOT NULL,
+            incorporation_date DATE,
+            company_type VARCHAR(150) DEFAULT 'Private Company Limited by Shares',
+            principal_activities TEXT,
+            registered_office TEXT,
+            register_of_members_location VARCHAR(255) DEFAULT 'At Registered Office',
+            register_of_debenture_location VARCHAR(255) DEFAULT 'N/A',
+            secretary_name VARCHAR(200),
+            secretary_previous_name VARCHAR(200) DEFAULT 'None',
+            secretary_address TEXT,
+            share_class VARCHAR(100) DEFAULT '1  Ordinary',
+            shares_issued VARCHAR(50),
+            share_nominal_value VARCHAR(50),
+            contact_phone VARCHAR(30),
+            contact_email VARCHAR(255),
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+    `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS company_directors (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            company_id INT NOT NULL,
+            full_name VARCHAR(200) NOT NULL,
+            previous_name VARCHAR(200) DEFAULT 'None',
+            business_occupation VARCHAR(150),
+            nationality VARCHAR(100) DEFAULT 'Mtanzania',
+            address TEXT,
+            date_of_birth VARCHAR(50) DEFAULT 'N/A',
+            other_directorships VARCHAR(255) DEFAULT 'None',
+            sort_order INT DEFAULT 0,
+            FOREIGN KEY (company_id) REFERENCES company_clients(id) ON DELETE CASCADE
+        )
+    `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS company_members (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            company_id INT NOT NULL,
+            full_name VARCHAR(200) NOT NULL,
+            address TEXT,
+            shares_held VARCHAR(50),
+            shares_transferred VARCHAR(50) DEFAULT 'Nil',
+            transfer_date VARCHAR(50) DEFAULT 'Nil',
+            remarks VARCHAR(255) DEFAULT 'None',
+            sort_order INT DEFAULT 0,
+            FOREIGN KEY (company_id) REFERENCES company_clients(id) ON DELETE CASCADE
+        )
+    `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS company_returns (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            company_id INT NOT NULL,
+            return_date DATE NOT NULL,
+            status VARCHAR(30) NOT NULL DEFAULT 'pending',
+            filed_date DATE,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_company_return (company_id, return_date),
+            FOREIGN KEY (company_id) REFERENCES company_clients(id) ON DELETE CASCADE
+        )
+    `);
+}
+
 function sanitizeName(value) {
     return String(value || 'document')
         .trim()
@@ -302,6 +373,285 @@ app.put('/api/clients/:id/checklist/:stepKey', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Imeshindikana ku-update checklist' });
+    }
+});
+
+// =========================================================
+// ANNUAL RETURN MODULE — company_clients / directors / members / returns
+// =========================================================
+
+async function fetchCompanyFull(companyId) {
+    const [companyRows] = await pool.query('SELECT * FROM company_clients WHERE id = ?', [companyId]);
+    if (!companyRows.length) return null;
+    const [directors] = await pool.query(
+        'SELECT * FROM company_directors WHERE company_id = ? ORDER BY sort_order, id', [companyId]
+    );
+    const [members] = await pool.query(
+        'SELECT * FROM company_members WHERE company_id = ? ORDER BY sort_order, id', [companyId]
+    );
+    const [returns] = await pool.query(
+        'SELECT * FROM company_returns WHERE company_id = ? ORDER BY return_date DESC', [companyId]
+    );
+    return { ...companyRows[0], directors, members, returns };
+}
+
+async function replaceDirectorsAndMembers(connection, companyId, directors = [], members = []) {
+    await connection.query('DELETE FROM company_directors WHERE company_id = ?', [companyId]);
+    await connection.query('DELETE FROM company_members WHERE company_id = ?', [companyId]);
+    for (let i = 0; i < directors.length; i += 1) {
+        const d = directors[i];
+        if (!d || !d.full_name) continue;
+        await connection.query(
+            `INSERT INTO company_directors
+                (company_id, full_name, previous_name, business_occupation, nationality, address, date_of_birth, other_directorships, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [companyId, d.full_name, d.previous_name || 'None', d.business_occupation || null, d.nationality || 'Mtanzania',
+                d.address || null, d.date_of_birth || 'N/A', d.other_directorships || 'None', i]
+        );
+    }
+    for (let i = 0; i < members.length; i += 1) {
+        const m = members[i];
+        if (!m || !m.full_name) continue;
+        await connection.query(
+            `INSERT INTO company_members
+                (company_id, full_name, address, shares_held, shares_transferred, transfer_date, remarks, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [companyId, m.full_name, m.address || null, m.shares_held || null, m.shares_transferred || 'Nil',
+                m.transfer_date || 'Nil', m.remarks || 'None', i]
+        );
+    }
+}
+
+// GET all companies (with optional search)
+app.get('/api/companies', async (req, res) => {
+    try {
+        const search = req.query.search;
+        let rows;
+        if (search) {
+            const like = `%${search}%`;
+            [rows] = await pool.query(
+                `SELECT * FROM company_clients WHERE company_name LIKE ? OR company_number LIKE ? ORDER BY created_at DESC`,
+                [like, like]
+            );
+        } else {
+            [rows] = await pool.query('SELECT * FROM company_clients ORDER BY created_at DESC');
+        }
+        // Attach a lightweight "next return due" summary for the list view
+        const companyIds = rows.map((r) => r.id);
+        let returnsByCompany = new Map();
+        if (companyIds.length) {
+            const [returns] = await pool.query(
+                `SELECT * FROM company_returns WHERE company_id IN (?) ORDER BY return_date DESC`,
+                [companyIds]
+            );
+            returnsByCompany = returns.reduce((map, r) => {
+                if (!map.has(r.company_id)) map.set(r.company_id, []);
+                map.get(r.company_id).push(r);
+                return map;
+            }, new Map());
+        }
+        const enriched = rows.map((r) => ({ ...r, returns: returnsByCompany.get(r.id) || [] }));
+        res.json(enriched);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana kupata taarifa za makampuni' });
+    }
+});
+
+// GET single company (with directors, members, returns)
+app.get('/api/companies/:id', async (req, res) => {
+    try {
+        const company = await fetchCompanyFull(req.params.id);
+        if (!company) return res.status(404).json({ error: 'Kampuni haijapatikana' });
+        res.json(company);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana kupata taarifa za kampuni' });
+    }
+});
+
+// CREATE company (+ directors + members)
+app.post('/api/companies', async (req, res) => {
+    const {
+        company_number, company_name, incorporation_date, company_type, principal_activities,
+        registered_office, register_of_members_location, register_of_debenture_location,
+        secretary_name, secretary_previous_name, secretary_address,
+        share_class, shares_issued, share_nominal_value,
+        contact_phone, contact_email, notes,
+        directors, members,
+    } = req.body;
+
+    if (!company_number || !company_name) {
+        return res.status(400).json({ error: 'Company Number na Company Name ni lazima' });
+    }
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const [result] = await connection.query(
+            `INSERT INTO company_clients (
+                company_number, company_name, incorporation_date, company_type, principal_activities,
+                registered_office, register_of_members_location, register_of_debenture_location,
+                secretary_name, secretary_previous_name, secretary_address,
+                share_class, shares_issued, share_nominal_value, contact_phone, contact_email, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                company_number, company_name, incorporation_date || null, company_type || 'Private Company Limited by Shares',
+                principal_activities || null, registered_office || null,
+                register_of_members_location || 'At Registered Office', register_of_debenture_location || 'N/A',
+                secretary_name || null, secretary_previous_name || 'None', secretary_address || null,
+                share_class || '1  Ordinary', shares_issued || null, share_nominal_value || null,
+                contact_phone || null, contact_email || null, notes || null,
+            ]
+        );
+        const companyId = result.insertId;
+        await replaceDirectorsAndMembers(connection, companyId, directors, members);
+        await connection.commit();
+        res.status(201).json({ id: companyId });
+    } catch (err) {
+        await connection.rollback();
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana kusave kampuni' });
+    } finally {
+        connection.release();
+    }
+});
+
+// UPDATE company (+ directors + members)
+app.put('/api/companies/:id', async (req, res) => {
+    const {
+        company_number, company_name, incorporation_date, company_type, principal_activities,
+        registered_office, register_of_members_location, register_of_debenture_location,
+        secretary_name, secretary_previous_name, secretary_address,
+        share_class, shares_issued, share_nominal_value,
+        contact_phone, contact_email, notes,
+        directors, members,
+    } = req.body;
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        await connection.query(
+            `UPDATE company_clients SET
+                company_number=?, company_name=?, incorporation_date=?, company_type=?, principal_activities=?,
+                registered_office=?, register_of_members_location=?, register_of_debenture_location=?,
+                secretary_name=?, secretary_previous_name=?, secretary_address=?,
+                share_class=?, shares_issued=?, share_nominal_value=?, contact_phone=?, contact_email=?, notes=?
+            WHERE id=?`,
+            [
+                company_number, company_name, incorporation_date || null, company_type || 'Private Company Limited by Shares',
+                principal_activities || null, registered_office || null,
+                register_of_members_location || 'At Registered Office', register_of_debenture_location || 'N/A',
+                secretary_name || null, secretary_previous_name || 'None', secretary_address || null,
+                share_class || '1  Ordinary', shares_issued || null, share_nominal_value || null,
+                contact_phone || null, contact_email || null, notes || null,
+                req.params.id,
+            ]
+        );
+        await replaceDirectorsAndMembers(connection, req.params.id, directors, members);
+        await connection.commit();
+        res.json({ success: true });
+    } catch (err) {
+        await connection.rollback();
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana ku-update kampuni' });
+    } finally {
+        connection.release();
+    }
+});
+
+// DELETE company
+app.delete('/api/companies/:id', async (req, res) => {
+    try {
+        await pool.query('DELETE FROM company_clients WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana ku-delete kampuni' });
+    }
+});
+
+// --- Annual return filings per company (one row per "return made up to" year) ---
+
+app.get('/api/companies/:id/returns', async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            'SELECT * FROM company_returns WHERE company_id = ? ORDER BY return_date DESC', [req.params.id]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana kupata annual returns' });
+    }
+});
+
+app.post('/api/companies/:id/returns', async (req, res) => {
+    try {
+        const { return_date, status, notes } = req.body;
+        if (!return_date) return res.status(400).json({ error: 'return_date ni lazima (mfano 2026-01-22)' });
+        const [result] = await pool.query(
+            `INSERT INTO company_returns (company_id, return_date, status, notes) VALUES (?, ?, ?, ?)`,
+            [req.params.id, return_date, status || 'pending', notes || null]
+        );
+        res.status(201).json({ id: result.insertId });
+    } catch (err) {
+        console.error(err);
+        if (err.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ error: 'Return ya tarehe hiyo tayari ipo kwa kampuni hii' });
+        }
+        res.status(500).json({ error: 'Imeshindikana kuongeza annual return' });
+    }
+});
+
+app.patch('/api/companies/:id/returns/:returnId', async (req, res) => {
+    const allowedStatuses = ['pending', 'in_progress', 'filed', 'completed'];
+    try {
+        const { status, filed_date, notes } = req.body;
+        if (status && !allowedStatuses.includes(status)) {
+            return res.status(400).json({ error: 'Status si sahihi' });
+        }
+        const fields = [];
+        const values = [];
+        if (status) { fields.push('status = ?'); values.push(status); }
+        if (filed_date !== undefined) { fields.push('filed_date = ?'); values.push(filed_date || null); }
+        if (notes !== undefined) { fields.push('notes = ?'); values.push(notes || null); }
+        if (!fields.length) return res.json({ success: true });
+        values.push(req.params.returnId, req.params.id);
+        await pool.query(`UPDATE company_returns SET ${fields.join(', ')} WHERE id = ? AND company_id = ?`, values);
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana ku-update annual return' });
+    }
+});
+
+app.delete('/api/companies/:id/returns/:returnId', async (req, res) => {
+    try {
+        await pool.query('DELETE FROM company_returns WHERE id = ? AND company_id = ?', [req.params.returnId, req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana ku-delete annual return' });
+    }
+});
+
+// Generate the filled Form 131 (.docx) for a specific company + return year
+app.get('/api/companies/:id/returns/:returnId/form131', async (req, res) => {
+    try {
+        const company = await fetchCompanyFull(req.params.id);
+        if (!company) return res.status(404).json({ error: 'Kampuni haijapatikana' });
+        const returnRecord = company.returns.find((r) => String(r.id) === String(req.params.returnId));
+        if (!returnRecord) return res.status(404).json({ error: 'Return haijapatikana' });
+
+        const buffer = await buildAnnualReturnDocxBuffer(company, company.directors, company.members, returnRecord);
+        const returnDateStr = new Date(returnRecord.return_date).toISOString().slice(0, 10);
+        const fileName = `FORM_131_${sanitizeName(company.company_name)}_${returnDateStr}.docx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.send(buffer);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Imeshindikana kutengeneza Form 131' });
     }
 });
 
@@ -458,6 +808,7 @@ Promise.all([
     ensurePremiseFields(),
     ensureClientDocumentsTable(),
     ensureClientChecklistTable(),
+    ensureCompanyTables(),
 ])
     .then(() => {
         return migrateDocumentsToClientFolders();

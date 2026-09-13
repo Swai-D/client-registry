@@ -19,29 +19,48 @@
         </div>
       </div>
       <button id="newClientBtn" class="btn btn-primary">+ Mteja Mpya</button>
+      <button id="newCompanyBtn" class="btn btn-primary" hidden>+ Kampuni Mpya</button>
+    </div>
+    <div class="wrap tab-bar">
+      <button type="button" class="tab-btn active" data-tab="clients">Leseni za Biashara</button>
+      <button type="button" class="tab-btn" data-tab="companies">Annual Return — Makampuni</button>
     </div>
   </header>
 
   <main class="wrap">
-    <section class="toolbar">
-      <input type="text" id="searchInput" placeholder="Tafuta kwa jina, simu au NIDA...">
-      <select id="statusFilter" aria-label="Chuja clients kwa status">
-        <option value="">Status zote</option>
-        <option value="pending">Pending</option>
-        <option value="in_progress">In progress</option>
-        <option value="submitted">Submitted BRELA</option>
-        <option value="approved">Approved</option>
-        <option value="completed">Completed</option>
-        <option value="cancelled">Cancelled</option>
-      </select>
-      <span id="countLabel" class="count-label">0 wateja</span>
+    <section id="clientsSection">
+      <section class="toolbar">
+        <input type="text" id="searchInput" placeholder="Tafuta kwa jina, simu au NIDA...">
+        <select id="statusFilter" aria-label="Chuja clients kwa status">
+          <option value="">Status zote</option>
+          <option value="pending">Pending</option>
+          <option value="in_progress">In progress</option>
+          <option value="submitted">Submitted BRELA</option>
+          <option value="approved">Approved</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <span id="countLabel" class="count-label">0 wateja</span>
+      </section>
+
+      <section id="clientList" class="client-list"></section>
+      <nav id="pagination" class="pagination" aria-label="Kurasa za clients" hidden></nav>
+      <p id="emptyState" class="empty-state" hidden>
+        Bado hakuna mteja aliyesajiliwa. Bofya <strong>"+ Mteja Mpya"</strong> kuanza.
+      </p>
     </section>
 
-    <section id="clientList" class="client-list"></section>
-    <nav id="pagination" class="pagination" aria-label="Kurasa za clients" hidden></nav>
-    <p id="emptyState" class="empty-state" hidden>
-      Bado hakuna mteja aliyesajiliwa. Bofya <strong>"+ Mteja Mpya"</strong> kuanza.
-    </p>
+    <section id="companiesSection" hidden>
+      <section class="toolbar">
+        <input type="text" id="companySearchInput" placeholder="Tafuta kwa jina la kampuni au Company Number...">
+        <span id="companyCountLabel" class="count-label">0 makampuni</span>
+      </section>
+
+      <section id="companyList" class="client-list"></section>
+      <p id="companyEmptyState" class="empty-state" hidden>
+        Bado hakuna kampuni iliyosajiliwa. Bofya <strong>"+ Kampuni Mpya"</strong> kuanza.
+      </p>
+    </section>
   </main>
 
   <!-- Modal ya kuongeza/kuedit client -->
@@ -187,8 +206,148 @@
     </div>
   </div>
 
+  <!-- Modal ya kuongeza/kuedit kampuni (Annual Return) -->
+  <div id="companyModalOverlay" class="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="companyModalTitle">Kampuni Mpya</h2>
+        <button id="closeCompanyModal" class="icon-btn">&times;</button>
+      </div>
+      <form id="companyForm">
+        <input type="hidden" id="companyId">
+        <label>Company Number
+          <input type="text" id="companyNumber" required placeholder="mfano: 114577">
+        </label>
+        <label>Company Name (Full Name)
+          <input type="text" id="companyName" required placeholder="mfano: GREENTOP ENTERPRISES COMPANY LIMITED">
+        </label>
+        <label>Tarehe ya Usajili (Incorporation Date)
+          <input type="date" id="incorporationDate">
+        </label>
+        <label>Company Type
+          <input type="text" id="companyType" placeholder="mfano: Private Company Limited by Shares" value="Private Company Limited by Shares">
+        </label>
+        <label>Anwani ya Registered Office
+          <textarea id="registeredOffice" rows="2" placeholder="Region, District, Ward, Street, Plot, Block, House, P.O.Box"></textarea>
+        </label>
+        <label>Principal Business Activities
+          <textarea id="principalActivities" rows="2" placeholder="mfano: 4290 Construction of other civil engineering projects; ..."></textarea>
+        </label>
+        <label>Register of members kept at
+          <input type="text" id="registerMembersLocation" value="At Registered Office">
+        </label>
+        <label>Register of debenture holders kept at
+          <input type="text" id="registerDebentureLocation" value="N/A">
+        </label>
+        <label>Simu ya Mawasiliano (si lazima)
+          <input type="text" id="companyPhone" placeholder="mfano: 0712 345 678">
+        </label>
+        <label>Email ya Mawasiliano (si lazima)
+          <input type="email" id="companyEmail" placeholder="mfano: info@kampuni.co.tz">
+        </label>
+
+        <h3 class="form-section-title">Company Secretary</h3>
+        <label>Jina
+          <input type="text" id="secretaryName" placeholder="Jina kamili la Company Secretary">
+        </label>
+        <label>Previous name(s)
+          <input type="text" id="secretaryPreviousName" value="None">
+        </label>
+        <label>Anwani
+          <textarea id="secretaryAddress" rows="2"></textarea>
+        </label>
+
+        <h3 class="form-section-title">Issued Share Capital</h3>
+        <label>Class
+          <input type="text" id="shareClass" value="1  Ordinary">
+        </label>
+        <label>Idadi ya Shares Zilizotolewa
+          <input type="text" id="sharesIssued" placeholder="mfano: 850">
+        </label>
+        <label>Aggregate Nominal Value (TZS)
+          <input type="text" id="shareNominalValue" placeholder="mfano: 25,500,000">
+        </label>
+
+        <h3 class="form-section-title">Directors</h3>
+        <div id="directorsRows" class="dynamic-rows"></div>
+        <button type="button" id="addDirectorRow" class="btn btn-ghost btn-small">+ Ongeza Director</button>
+
+        <h3 class="form-section-title">Wanahisa / Members (List of Past and Present Members)</h3>
+        <div id="membersRows" class="dynamic-rows"></div>
+        <button type="button" id="addMemberRow" class="btn btn-ghost btn-small">+ Ongeza Mwanahisa</button>
+
+        <label>Maelezo ya Ziada (si lazima)
+          <textarea id="companyNotes" rows="2"></textarea>
+        </label>
+
+        <div class="modal-actions">
+          <button type="button" id="cancelCompanyBtn" class="btn btn-ghost">Ghairi</button>
+          <button type="submit" class="btn btn-primary">Save Kampuni</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Template ya row moja ya Director -->
+  <template id="directorRowTemplate">
+    <div class="dynamic-row" data-role="director-row">
+      <div class="dynamic-row-grid">
+        <input type="text" data-field="full_name" placeholder="Jina Kamili" required>
+        <input type="text" data-field="business_occupation" placeholder="Business occupation (mfano: Businessman)">
+        <input type="text" data-field="nationality" placeholder="Nationality" value="Mtanzania">
+        <input type="text" data-field="previous_name" placeholder="Previous name(s)" value="None">
+        <input type="text" data-field="date_of_birth" placeholder="Date of birth" value="N/A">
+        <input type="text" data-field="other_directorships" placeholder="Other directorships" value="None">
+      </div>
+      <textarea data-field="address" rows="1" placeholder="Anwani"></textarea>
+      <button type="button" class="btn btn-danger btn-small" data-action="remove-row">Ondoa</button>
+    </div>
+  </template>
+
+  <!-- Template ya row moja ya Member/Mwanahisa -->
+  <template id="memberRowTemplate">
+    <div class="dynamic-row" data-role="member-row">
+      <div class="dynamic-row-grid">
+        <input type="text" data-field="full_name" placeholder="Jina Kamili" required>
+        <input type="text" data-field="shares_held" placeholder="Shares held (mfano: 750)">
+        <input type="text" data-field="shares_transferred" placeholder="Shares transferred" value="Nil">
+        <input type="text" data-field="transfer_date" placeholder="Transfer date" value="Nil">
+        <input type="text" data-field="remarks" placeholder="Remarks" value="None">
+      </div>
+      <textarea data-field="address" rows="1" placeholder="Anwani"></textarea>
+      <button type="button" class="btn btn-danger btn-small" data-action="remove-row">Ondoa</button>
+    </div>
+  </template>
+
+  <!-- View modal ya kampuni -->
+  <div id="companyViewModalOverlay" class="modal-overlay" hidden>
+    <div class="modal view-modal">
+      <div class="modal-head">
+        <h2 id="companyViewModalTitle">Taarifa za Kampuni</h2>
+        <button id="closeCompanyViewModal" class="icon-btn" aria-label="Funga">&times;</button>
+      </div>
+      <div id="viewCompanyFields" class="view-fields"></div>
+      <div class="view-actions">
+        <button type="button" id="copyAllCompanyDetails" class="btn btn-primary">Copy All Details</button>
+        <button type="button" id="editCompanyFromView" class="btn btn-ghost">Edit Kampuni</button>
+      </div>
+
+      <div class="returns-section">
+        <h3>Annual Returns (Form 131 kwa kila mwaka)</h3>
+        <form id="addReturnForm" class="add-return-form">
+          <label>Return made up to
+            <input type="date" id="newReturnDate" required>
+          </label>
+          <button type="submit" class="btn btn-primary btn-small">+ Ongeza Return</button>
+        </form>
+        <div id="returnsList" class="returns-list"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast" hidden></div>
 
   <script src="app.js"></script>
+  <script src="companies.js"></script>
 </body>
 </html>
