@@ -89,7 +89,8 @@ body {
   gap: 16px;
   margin: 28px 0 18px;
 }
-#searchInput {
+#searchInput,
+#companySearchInput {
   flex: 1;
   padding: 11px 14px;
   border: 1px solid var(--line);
@@ -98,7 +99,11 @@ body {
   background: var(--card);
   font-family: 'Inter', sans-serif;
 }
-#searchInput:focus { outline: 2px solid var(--gold-soft); border-color: var(--gold); }
+#searchInput:focus,
+#companySearchInput:focus {
+  outline: 2px solid var(--gold-soft);
+  border-color: var(--gold);
+}
 #statusFilter {
   padding: 11px 12px;
   border: 1px solid var(--line);
